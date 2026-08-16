@@ -383,7 +383,7 @@ func hasGPSCoordinates(r reader, off uint32) bool {
 		if !ok {
 			return false
 		}
-		if tag == 0x0002 || tag == 0x0004 {
+		if tag == 0x0004 {
 			return true
 		}
 	}

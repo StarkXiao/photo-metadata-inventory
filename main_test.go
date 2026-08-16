@@ -47,6 +47,21 @@ func TestParseTIFFDoesNotFlagEmptyGPSDirectory(t *testing.T) {
 	}
 }
 
+func TestParseTIFFFlagsLatitudeMetadata(t *testing.T) {
+	b := make([]byte, 48)
+	copy(b, "II*\x00\x08\x00\x00\x00")
+	b[8] = 1
+	b[10], b[11] = 0x25, 0x88
+	b[12], b[13] = 4, 0
+	b[14] = 1
+	b[18] = 30
+	b[30] = 1
+	b[32], b[33] = 0x02, 0x00
+	if _, _, gps, err := parseTIFF(b); err != nil || !gps {
+		t.Fatalf("got gps=%v err=%v", gps, err)
+	}
+}
+
 func TestParseTIFFHandlesCyclicIFD(t *testing.T) {
 	b := make([]byte, 32)
 	copy(b, "II*\x00\x08\x00\x00\x00")

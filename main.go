@@ -254,7 +254,7 @@ func pngEXIF(b []byte) []byte {
 			return nil
 		}
 		end := i + 8 + int(n)
-		if bytes.Equal(b[i+4:i+8], []byte("eXif")) {
+		if bytes.Equal(b[i+4:i+8], []byte("eXIf")) {
 			return b[i+8 : end]
 		}
 		i += int(n) + 12

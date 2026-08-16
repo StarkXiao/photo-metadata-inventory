@@ -3,7 +3,6 @@ package main
 import "testing"
 
 func TestParseTIFF(t *testing.T) {
-	// Little-endian TIFF with Make, Model, DateTimeOriginal, and GPS IFD pointer.
 	b := make([]byte, 220)
 	copy(b, "II*\x00\x08\x00\x00\x00")
 	b[8] = 4

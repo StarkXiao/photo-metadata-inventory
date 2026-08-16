@@ -237,7 +237,7 @@ func jpegEXIF(b []byte) []byte {
 			break
 		}
 		p := b[i+4 : i+2+n]
-		if marker == 0xe2 && len(p) >= 6 && bytes.Equal(p[:6], []byte("Exif\x00\x00")) {
+		if marker == 0xe1 && len(p) >= 6 && bytes.Equal(p[:6], []byte("Exif\x00\x00")) {
 			return p[6:]
 		}
 		i += n + 2

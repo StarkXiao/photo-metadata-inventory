@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseTIFF(t *testing.T) {
 	b := make([]byte, 220)
@@ -64,5 +69,19 @@ func TestPNGEXIFRejectsTruncatedChunk(t *testing.T) {
 	b := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 8, 'e', 'X', 'I', 'f')
 	if got := pngEXIF(b); got != nil {
 		t.Fatalf("expected no EXIF, got %x", got)
+	}
+}
+
+func TestWriteCSVPreservesGPSFlag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inventory.csv")
+	if err := writeCSV(path, []Photo{{Path: "photo.jpg", Format: "jpeg", HasGPS: true}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "photo.jpg,jpeg,0,,,true,") {
+		t.Fatalf("unexpected CSV: %s", b)
 	}
 }

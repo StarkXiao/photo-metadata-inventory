@@ -343,7 +343,9 @@ func parseTIFF(b []byte) (time.Time, string, bool, error) {
 				continue
 			}
 			if tag == 0x8825 && uint64(val)+2 <= uint64(len(b)) {
-				gps = hasGPSCoordinates(r, val)
+				// Keep a finding from an earlier GPS pointer/entry if a later
+				// malformed or non-location directory is encountered.
+				gps = gps || hasGPSCoordinates(r, val)
 				continue
 			}
 			if tag == 0x8769 && val < uint32(len(b)) {
@@ -383,7 +385,10 @@ func hasGPSCoordinates(r reader, off uint32) bool {
 		if !ok {
 			return false
 		}
-		if tag == 0x0004 {
+		// GPS IFD contains more location-bearing fields than just latitude
+		// and longitude (for example altitude, destination, and direction).
+		// GPSVersionID (0) is descriptive only, so it is excluded.
+		if tag >= 0x0001 && tag <= 0x001f {
 			return true
 		}
 	}

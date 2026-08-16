@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestParseTIFF(t *testing.T) {
@@ -74,5 +75,54 @@ func TestJPEGEXIFReadsAPP1Payload(t *testing.T) {
 	b := []byte{0xff, 0xd8, 0xff, 0xe1, 0x00, 0x0a, 'E', 'x', 'i', 'f', 0, 0, 'I', 'I'}
 	if got := jpegEXIF(b); !bytes.Equal(got, []byte("II")) {
 		t.Fatalf("got %x", got)
+	}
+}
+
+func TestExtractJPEGStandardEXIF(t *testing.T) {
+	tiff := make([]byte, 180)
+	copy(tiff, "II*\x00\x08\x00\x00\x00")
+	put16 := func(i int, v uint16) { tiff[i], tiff[i+1] = byte(v), byte(v>>8) }
+	put32 := func(i int, v uint32) {
+		tiff[i], tiff[i+1], tiff[i+2], tiff[i+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
+	}
+	entry := func(i int, tag uint16, count, value uint32) {
+		put16(i, tag)
+		put16(i+2, 2)
+		put32(i+4, count)
+		put32(i+8, value)
+	}
+
+	// IFD0 contains the usual Make, Model, and Exif IFD pointer entries.
+	put16(8, 3)
+	entry(10, 0x010f, 6, 80)
+	entry(22, 0x0110, 9, 86)
+	put16(34, 0x8769)
+	put16(36, 4)
+	put32(38, 1)
+	put32(42, 112)
+	put32(46, 0)
+	copy(tiff[80:], "Canon\x00EOS R8\x00")
+
+	put16(112, 1)
+	entry(114, 0x9003, 20, 130)
+	put32(126, 0)
+	copy(tiff[130:], "2024:01:02 03:04:05\x00")
+
+	exif := append([]byte("Exif\x00\x00"), tiff...)
+	jpeg := []byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 'J', 'F'}
+	jpeg = append(jpeg, 0xff, 0xe1, byte((len(exif)+2)>>8), byte(len(exif)+2))
+	jpeg = append(jpeg, exif...)
+	jpeg = append(jpeg, 0xff, 0xd9)
+
+	taken, camera, _, err := extract("jpeg", jpeg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if camera != "Canon EOS R8" {
+		t.Fatalf("camera = %q, want Canon EOS R8", camera)
+	}
+	wantTaken := time.Date(2024, time.January, 2, 3, 4, 5, 0, time.Local)
+	if !taken.Equal(wantTaken) {
+		t.Fatalf("taken = %v, want %v", taken, wantTaken)
 	}
 }

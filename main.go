@@ -193,7 +193,7 @@ func printSafety(photos []Photo) {
 func extract(format string, data []byte) (time.Time, string, bool, error) {
 	var tiff []byte
 	switch format {
-	case "jpeg":
+	case "jpg", "jpeg":
 		tiff = jpegEXIF(data)
 	case "png":
 		tiff = pngEXIF(data)
@@ -210,37 +210,38 @@ func jpegEXIF(b []byte) []byte {
 	if len(b) < 4 || b[0] != 0xff || b[1] != 0xd8 {
 		return nil
 	}
-	for i := 2; i+1 < len(b); {
-		if b[i] != 0xff {
-			i++
-			continue
-		}
-		for i+1 < len(b) && b[i+1] == 0xff {
+	for i := 2; i < len(b); {
+		// JPEG allows arbitrary 0xff fill bytes before a marker.
+		for i < len(b) && b[i] != 0xff {
 			i++
 		}
-		if i+1 >= len(b) {
-			break
+		for i < len(b) && b[i] == 0xff {
+			i++
 		}
-		marker := b[i+1]
+		if i >= len(b) {
+			return nil
+		}
+		marker := b[i]
+		i++
 		if marker == 0xda || marker == 0xd9 {
 			break
 		}
 		if marker == 0x00 || marker == 0x01 || (marker >= 0xd0 && marker <= 0xd7) {
-			i += 2
 			continue
 		}
-		if i+4 > len(b) {
+		if i+2 > len(b) {
 			break
 		}
-		n := int(b[i+2])<<8 | int(b[i+3])
-		if n < 2 || i+2+n > len(b) {
+		n := int(b[i])<<8 | int(b[i+1])
+		segmentEnd := i + n
+		if n < 2 || segmentEnd > len(b) {
 			break
 		}
-		p := b[i+4 : i+2+n]
-		if marker == 0xe2 && len(p) >= 6 && bytes.Equal(p[:6], []byte("Exif\x00\x00")) {
+		p := b[i+2 : segmentEnd]
+		if marker == 0xe1 && len(p) >= 6 && bytes.Equal(p[:6], []byte("Exif\x00\x00")) {
 			return p[6:]
 		}
-		i += n + 2
+		i = segmentEnd
 	}
 	return nil
 }

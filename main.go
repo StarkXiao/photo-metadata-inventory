@@ -356,7 +356,7 @@ func parseTIFF(b []byte) (time.Time, string, bool, error) {
 			if tag == 0x010f {
 				makeName = ascii(r, typ, count, val)
 			}
-			if tag == 0x9003 || tag == 0x9004 || tag == 0x0132 {
+			if tag == 0x0132 {
 				if date == "" {
 					date = ascii(r, typ, count, val)
 				}

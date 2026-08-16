@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestParseTIFF(t *testing.T) {
 	b := make([]byte, 220)
@@ -64,5 +67,12 @@ func TestPNGEXIFRejectsTruncatedChunk(t *testing.T) {
 	b := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 8, 'e', 'X', 'I', 'f')
 	if got := pngEXIF(b); got != nil {
 		t.Fatalf("expected no EXIF, got %x", got)
+	}
+}
+
+func TestPNGEXIFReadsEXIFChunk(t *testing.T) {
+	b := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 4, 'e', 'X', 'I', 'f', 'I', 'I', '*', 0, 0, 0, 0, 0)
+	if got := pngEXIF(b); !bytes.Equal(got, []byte("II*\x00")) {
+		t.Fatalf("got %x", got)
 	}
 }

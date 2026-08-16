@@ -1,0 +1,10 @@
+# Build outputs
+photo-metadata-inventory
+photo-inventory
+*.exe
+
+# Generated reports
+*.csv
+
+# Editor and OS files
+.DS_Store

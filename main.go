@@ -165,7 +165,7 @@ func writeCSV(path string, photos []Photo) error {
 		if p.ParseError != nil {
 			parseErr = p.ParseError.Error()
 		}
-		if err := w.Write([]string{p.Path, p.Format, fmt.Sprint(p.Size), when, p.Camera, fmt.Sprint(!p.HasGPS), issue(p), parseErr}); err != nil {
+		if err := w.Write([]string{p.Path, p.Format, fmt.Sprint(p.Size), when, p.Camera, fmt.Sprint(p.HasGPS), issue(p), parseErr}); err != nil {
 			_ = f.Close()
 			return err
 		}

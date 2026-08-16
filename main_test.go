@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,54 @@ func TestParseTIFFDoesNotFlagEmptyGPSDirectory(t *testing.T) {
 	b[18] = 30
 	if _, _, gps, err := parseTIFF(b); err != nil || gps {
 		t.Fatalf("got gps=%v err=%v", gps, err)
+	}
+}
+
+func TestParseTIFFPreservesGPSAcrossIFDs(t *testing.T) {
+	b := make([]byte, 220)
+	copy(b, "II*\x00\x08\x00\x00\x00")
+	put16 := func(i int, v uint16) { b[i], b[i+1] = byte(v), byte(v>>8) }
+	put32 := func(i int, v uint32) { b[i], b[i+1], b[i+2], b[i+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24) }
+	entry := func(i int, tag uint16, typ uint16, n, v uint32) {
+		put16(i, tag)
+		put16(i+2, typ)
+		put32(i+4, n)
+		put32(i+8, v)
+	}
+	// Root IFD: a valid GPS directory and an Exif IFD.
+	put16(8, 2)
+	entry(10, 0x8825, 4, 1, 100)
+	entry(22, 0x8769, 4, 1, 140)
+	// The GPS directory contains latitude, while the Exif IFD points at an empty directory.
+	put16(100, 1)
+	entry(102, 0x0002, 5, 3, 0)
+	put16(140, 1)
+	entry(142, 0x8825, 4, 1, 180)
+	put16(180, 0)
+
+	_, _, gps, err := parseTIFF(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gps {
+		t.Fatal("expected GPS flag to remain true across IFDs")
+	}
+
+	path := filepath.Join(t.TempDir(), "inventory.csv")
+	if err := writeCSV(path, []Photo{{Path: "photo.jpg", Format: "jpeg", HasGPS: gps}}); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	records, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := records[1][5]; got != "true" {
+		t.Fatalf("has_gps = %q, want true", got)
 	}
 }
 

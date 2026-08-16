@@ -165,7 +165,7 @@ func writeCSV(path string, photos []Photo) error {
 		if p.ParseError != nil {
 			parseErr = p.ParseError.Error()
 		}
-		if err := w.Write([]string{p.Path, p.Format, fmt.Sprint(p.Size), when, p.Camera, fmt.Sprint(!p.HasGPS), issue(p), parseErr}); err != nil {
+		if err := w.Write([]string{p.Path, p.Format, fmt.Sprint(p.Size), when, p.Camera, fmt.Sprint(p.HasGPS), issue(p), parseErr}); err != nil {
 			_ = f.Close()
 			return err
 		}
@@ -343,7 +343,9 @@ func parseTIFF(b []byte) (time.Time, string, bool, error) {
 				continue
 			}
 			if tag == 0x8825 && uint64(val)+2 <= uint64(len(b)) {
-				gps = hasGPSCoordinates(r, val)
+				// GPS metadata can be referenced from more than one IFD. Once a
+				// coordinate entry is found, later empty directories must not clear it.
+				gps = gps || hasGPSCoordinates(r, val)
 				continue
 			}
 			if tag == 0x8769 && val < uint32(len(b)) {

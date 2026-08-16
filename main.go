@@ -356,10 +356,18 @@ func parseTIFF(b []byte) (time.Time, string, bool, error) {
 			if tag == 0x010f {
 				makeName = ascii(r, typ, count, val)
 			}
-			if tag == 0x0132 {
+			if tag == 0x9003 || tag == 0x9004 || tag == 0x0132 {
 				if date == "" {
 					date = ascii(r, typ, count, val)
 				}
+			}
+		}
+		// TIFF directories can be chained. Some cameras place their capture
+		// time in a later IFD instead of the first directory.
+		nextPos := uint64(off) + 2 + uint64(n)*12
+		if nextPos+4 <= uint64(len(b)) {
+			if next, ok := r.u32(int(nextPos)); ok && next != 0 {
+				visit(next)
 			}
 		}
 	}

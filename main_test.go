@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"encoding/csv"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseTIFF(t *testing.T) {
 	b := make([]byte, 220)
@@ -58,6 +65,84 @@ func TestParseTIFFHandlesCyclicIFD(t *testing.T) {
 	if _, _, _, err := parseTIFF(b); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestScanReportsAndExportsDateFromLinkedIFD(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "linked-ifd.jpg")
+	tiff := make([]byte, 100)
+	copy(tiff, "II*\x00\x08\x00\x00\x00")
+	tiff[8] = 0   // no entries in IFD0
+	tiff[10] = 16 // IFD0's next-directory pointer
+	tiff[16] = 1
+	put16 := func(i int, v uint16) { tiff[i], tiff[i+1] = byte(v), byte(v>>8) }
+	put32 := func(i int, v uint32) {
+		tiff[i], tiff[i+1], tiff[i+2], tiff[i+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
+	}
+	put16(18, 0x9003)
+	put16(20, 2)
+	put32(22, 20)
+	put32(26, 40)
+	copy(tiff[40:], "2024:01:02 03:04:05\x00")
+	jpeg := append([]byte{0xff, 0xd8, 0xff, 0xe1, 0, byte(len(tiff) + 8)}, []byte("Exif\x00\x00")...)
+	jpeg = append(jpeg, tiff...)
+	jpeg = append(jpeg, 0xff, 0xd9)
+	if err := os.WriteFile(path, jpeg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	photos, err := scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(photos) != 1 || photos[0].TakenAt.IsZero() || photos[0].TakenAt.Year() != 2024 {
+		t.Fatalf("got photos=%+v", photos)
+	}
+
+	csvPath := filepath.Join(dir, "inventory.csv")
+	if err := writeCSV(csvPath, photos); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(csvPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	records, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := records[1][3]; !strings.HasPrefix(got, "2024-01-02T03:04:05") {
+		t.Fatalf("captured_at = %q", got)
+	}
+
+	output := captureStdout(t, func() { printReport(photos) })
+	if !strings.Contains(output, "2024-01") || !strings.Contains(output, "missing time: 0") {
+		t.Fatalf("report did not group photo by capture month:\n%s", output)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	fn()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = old
+	var output bytes.Buffer
+	if _, err := output.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return output.String()
 }
 
 func TestPNGEXIFRejectsTruncatedChunk(t *testing.T) {

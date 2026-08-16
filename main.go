@@ -253,9 +253,16 @@ func pngEXIF(b []byte) []byte {
 		if n > uint64(len(b)-i-12) {
 			return nil
 		}
-		end := i + 8 + int(n)
-		if bytes.Equal(b[i+4:i+8], []byte("eXif")) {
-			return b[i+8 : end]
+		payloadStart := i + 8
+		payloadEnd := payloadStart + int(n)
+		if bytes.Equal(b[i+4:i+8], []byte("eXIf")) {
+			payload := b[payloadStart:payloadEnd]
+			// PNG eXIf data is normally a TIFF stream. Some encoders retain
+			// the JPEG Exif prefix, which must not hide the TIFF data.
+			if bytes.HasPrefix(payload, []byte("Exif\x00\x00")) {
+				return findTIFF(payload[6:])
+			}
+			return payload
 		}
 		i += int(n) + 12
 	}

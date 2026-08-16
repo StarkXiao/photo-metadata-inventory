@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestParseTIFF(t *testing.T) {
@@ -74,5 +75,38 @@ func TestPNGEXIFReadsEXIFChunk(t *testing.T) {
 	b := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 4, 'e', 'X', 'I', 'f', 'I', 'I', '*', 0, 0, 0, 0, 0)
 	if got := pngEXIF(b); !bytes.Equal(got, []byte("II*\x00")) {
 		t.Fatalf("got %x", got)
+	}
+}
+
+func TestExtractPNGEXIF(t *testing.T) {
+	tiff := make([]byte, 100)
+	copy(tiff, "II*\x00\x08\x00\x00\x00")
+	tiff[8] = 2
+	put16 := func(i int, v uint16) { tiff[i], tiff[i+1] = byte(v), byte(v>>8) }
+	put32 := func(i int, v uint32) {
+		tiff[i], tiff[i+1], tiff[i+2], tiff[i+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
+	}
+	entry := func(i int, tag uint16, count, value uint32) {
+		put16(i, tag)
+		put16(i+2, 2)
+		put32(i+4, count)
+		put32(i+8, value)
+	}
+	entry(10, 0x0110, 8, 40)
+	entry(22, 0x0132, 20, 50)
+	copy(tiff[40:], "CameraX\x00")
+	copy(tiff[50:], "2024:02:03 04:05:06\x00")
+
+	png := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, byte(len(tiff)+6), 'e', 'X', 'I', 'f')
+	png = append(png, []byte("Exif\x00\x00")...)
+	png = append(png, tiff...)
+	png = append(png, 0, 0, 0, 0) // CRC is irrelevant to metadata extraction.
+
+	taken, camera, gps, err := extract("png", png)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if camera != "CameraX" || gps || !taken.Equal(time.Date(2024, 2, 3, 4, 5, 6, 0, time.Local)) {
+		t.Fatalf("got camera=%q gps=%v date=%v", camera, gps, taken)
 	}
 }
